@@ -1,0 +1,40 @@
+import pandas as pd
+kimap=pd.read_csv("/mnt/data/zhujia/IDG_DREAM/multitask/mapping/kimap.csv")
+icmap=pd.read_csv("/mnt/data/zhujia/IDG_DREAM/multitask/mapping/ic50map.csv")
+pomap=pd.read_csv("/mnt/data/zhujia/IDG_DREAM/multitask/mapping/potencymap.csv")
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import pearsonr
+jp=sns.jointplot(x="pvalue_y",y="pvalue_x",data=kimap,color="palegreen")
+jp.plot_joint(sns.regplot,color="forestgreen",marker="+")
+
+print("====")
+print("ki pearson:%s"%(pearsonr(kimap.pvalue_y,kimap.pvalue_x)[0]))
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import pearsonr
+jp=sns.jointplot(x="pvalue_y",y="pvalue_x",data=icmap,color="purple")
+jp.plot_joint(sns.regplot,color="violet",marker="+")
+
+print("ic50 pearson:%s"%(pearsonr(icmap.pvalue_y,icmap.pvalue_x)[0]))
+print("====")
+print("potency pearson:%s"%(pearsonr(pomap.pvalue_y,pomap.pvalue_x)[0]))
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import pearsonr
+jp=sns.jointplot(x="pvalue_y",y="pvalue_x",data=icmap,color="purple")
+jp.plot_joint(sns.regplot,color="violet",marker="+")
+
+print("ic50 pearson:%s"%(pearsonr(icmap.pvalue_y,icmap.pvalue_x)[0]))
+
+import numpy as np
+from sklearn.linear_model import LinearRegression
+x=np.array(icmap.pvalue_y).reshape((-1, 1))
+y=np.array(icmap.pvalue_x).reshape((-1, 1))
+model_ic = LinearRegression().fit(x, y)
+r_sq = model_ic.score(x, y)
+print('coefficient of determination:', r_sq)
+print('intercept:', model_ic.intercept_)
+print('slope:', model_ic.coef_)
