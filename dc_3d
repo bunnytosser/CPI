@@ -1,0 +1,238 @@
+import pandas as pd
+from scipy import stats
+from scipy.stats import norm
+import pandas as pd
+import numpy as np
+import sklearn as sk
+from sklearn import preprocessing
+from sklearn.linear_model import LogisticRegression
+from sklearn.neural_network import MLPClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn import metrics
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_score
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import recall_score
+from sklearn.pipeline import make_pipeline
+
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.decomposition import PCA
+
+from sklearn.model_selection import ShuffleSplit
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn import svm
+from collections import defaultdict
+from sklearn.metrics import make_scorer
+from sklearn.preprocessing import MaxAbsScaler,StandardScaler,RobustScaler
+import pickle
+from sklearn.externals import joblib
+from scipy.sparse import csr_matrix
+from sklearn.ensemble import GradientBoostingClassifier
+from ast import literal_eval
+import xgboost as xgb
+import warnings
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.svm import LinearSVC
+
+from sklearn.metrics import f1_score
+import numpy as np
+import copy
+from math import sqrt
+from scipy import stats
+from sklearn import preprocessing,metrics
+import seaborn as sns
+aucs=[]
+spearmans=[]
+rmses=[]
+pearsons=[]
+f1s=[]
+aucs1=[]
+spearmans1=[]
+rmses1=[]
+pearsons1=[]
+f1s1=[]
+def svmtxt_converter(filename):
+    with open(filename+".txt") as fin, open(filename+".svm.txt", 'w') as fout:
+        for line in fin:
+            fout.write(line.replace(',', ' ').replace("\t"," "))
+def average_AUC(y,f):
+    """
+    Task:    To compute average area under the ROC curves (AUC) given ten
+             interaction threshold values from the pKd interval [6 M, 8 M]
+             to binarize pKd's into true class labels.
+    Input:   y      Vector with original labels (pKd [M])
+             f      Vector with predicted labels (pKd [M])
+    Output:  avAUC   average AUC
+    """
+    thr = np.linspace(6,8,10)
+    auc = np.empty(np.shape(thr)); auc[:] = np.nan
+    for i in range(len(thr)):
+        y_binary = copy.deepcopy(y)
+        y_binary = preprocessing.binarize(np.array(y_binary).reshape(1,-1), threshold=thr[i], copy=False)[0]
+        fpr, tpr, thresholds = metrics.roc_curve(y_binary, f, pos_label=1)
+        auc[i] = metrics.auc(fpr, tpr)
+#     print(auc)
+    avAUC = np.nanmean(auc)
+    return avAUC
+
+def f1(y,f):
+    """
+    Task:    To compute F1 score using the threshold of 7 M
+             to binarize pKd's into true class labels.
+
+    Input:   y      Vector with original labels (pKd [M])
+             f      Vector with predicted labels (pKd [M])
+
+    Output:  f1     F1 score
+    """
+
+    y_binary = copy.deepcopy(y)
+    y_binary = preprocessing.binarize(np.array(y_binary).reshape(1,-1), threshold=7.0, copy=False)[0]
+    f_binary = copy.deepcopy(f)
+    f_binary = preprocessing.binarize(np.array(f_binary).reshape(1,-1), threshold=7.0, copy=False)[0]
+
+    f1 = metrics.f1_score(y_binary, f_binary)
+
+    return f1
+
+
+def eval(ypred,yreal):
+    auc=[]
+    for thr in np.arange(6,8,0.2):
+        truelabel=np.where(yreal>thr,1,0)
+        predlabel=np.where(ypred>thr,1,0)
+        auc.append(metrics.roc_auc_score(truelabel,predlabel))
+    from sklearn.metrics import r2_score
+#     print("r2 score",r2_score(yreal,ypred))
+#     print("mean auc",np.mean(auc))
+    print("f1",f1(yreal,ypred))
+    f1s.append(f1(yreal,ypred))
+    from scipy.stats.stats import pearsonr,spearmanr
+    from sklearn.metrics import mean_squared_error
+    from math import sqrt
+    print("auc",average_AUC(yreal,ypred))
+    aucs.append(average_AUC(yreal,ypred))
+    print("pearson",pearsonr(ypred,yreal)[0])
+    pearsons.append(pearsonr(ypred,yreal)[0])
+    print("spearman",spearmanr(ypred,yreal)[0])
+    spearmans.append(spearmanr(ypred,yreal)[0])
+    print("rmse",sqrt(mean_squared_error(ypred, yreal)))
+    rmses.append(sqrt(mean_squared_error(ypred, yreal)))
+    
+def eval1(ypred,yreal):
+    auc=[]
+    for thr in np.arange(6,8,0.2):
+        truelabel=np.where(yreal>thr,1,0)
+        predlabel=np.where(ypred>thr,1,0)
+        auc.append(metrics.roc_auc_score(truelabel,predlabel))
+    from sklearn.metrics import r2_score
+#     print("r2 score",r2_score(yreal,ypred))
+#     print("mean auc",np.mean(auc))
+    print("f1",f1(yreal,ypred))
+    f1s1.append(f1(yreal,ypred))
+    from scipy.stats.stats import pearsonr,spearmanr
+    from sklearn.metrics import mean_squared_error
+    from math import sqrt
+    print("auc",average_AUC(yreal,ypred))
+    aucs1.append(average_AUC(yreal,ypred))
+    print("pearson",pearsonr(ypred,yreal)[0])
+    pearsons1.append(pearsonr(ypred,yreal)[0])
+    print("spearman",spearmanr(ypred,yreal)[0])
+    spearmans1.append(spearmanr(ypred,yreal)[0])
+    print("rmse",sqrt(mean_squared_error(ypred, yreal)))
+    rmses1.append(sqrt(mean_squared_error(ypred, yreal)))
+
+def get_importance(bst):
+    importances=bst.get_score(importance_type='gain')
+    importances=pd.DataFrame.from_dict(importances,orient="index")
+    print(importances.sort_values(0,ascending=False))
+    return(importances.sort_values(0,ascending=False))
+def round_plot(bst):
+    dpred = xgb.DMatrix('predict.svm.txt')
+    predicted_kd=bst.predict(dpred)
+    import seaborn as sns
+    sns.distplot(predicted_kd,bins=17)
+    
+def xgboost_trainer(dtrain,dtest,num_round=200,lam=100,max_depth=3,gamma=1,nthread=4,subsample=0.8,alpha=1):
+    aucs=[]
+    spearmans=[]
+    rmses=[]
+    pearsons=[]
+    f1s=[]
+    aucs1=[]
+    spearmans1=[]
+    rmses1=[]
+    pearsons1=[]
+    f1s1=[]
+    num_round = num_round
+    param = {"verbosity":2,"feature_selector":"shuffle", 'nthread':nthread,'silent': 1, 'objective': 'reg:linear',
+                    "early_stopping_rounds": 2,"eval_metric":"rmse","seed":92,"subsample":subsample,'max_depth': max_depth,
+                   'eta': 0.1,"gamma":gamma,"n_estimators":100,"alpha":alpha,"lambda":lam,"colsample_bytree":0.2,
+             "min_child_weight":2}
+    evallist = [(dtest, 'eval'), (dtrain, 'train')]
+    bst = xgb.train(param, dtrain, num_round,evallist)
+    pkl_filename ="pkl0.pkl"
+    with open(pkl_filename, 'wb') as file:
+        pickle.dump(bst, file)
+    model=pickle.load(open(pkl_filename,"rb"))
+    ypred = model.predict(dtrain)
+    # sns.distplot(ypred)
+    yreal=dtrain.get_label()
+    print("training...")
+    eval1(ypred,yreal)
+    print("testing...")
+    ypred = model.predict(dtest)
+#     sns.distplot(ypred)
+    yreal=dtest.get_label()
+    eval(ypred,yreal)
+    get_importance(bst)
+    round_plot(bst)
+    return(bst)
+ 
+#get data
+import pandas as pd
+import os
+d1=pd.read_csv("refined_affinity.csv").iloc[:,1:]
+features=pd.read_csv("features1.csv").iloc[:,1:]
+d1.columns=["pdb","target"]
+joined=d1.merge(features,how="right",on="pdb")
+joined_variant=joined.loc[:,joined.apply(pd.Series.nunique) != 1]
+feacol=joined_variant.columns
+joined_variant.head()
+joined_variant=joined_variant.replace([np.inf, -np.inf], np.nan)
+joined_variant=joined_variant.replace(np.nan,0)
+X=joined_variant.iloc[:,2:]
+Y=joined_variant.iloc[:,1]
+x_train,x_test,y_train,y_test=train_test_split(X,Y,test_size=0.2)
+
+
+#training
+from sklearn.model_selection import RandomizedSearchCV
+import time
+# fixed_params = {'silent': False, 'objective': 'reg:linear',
+#                 "early_stopping_rounds": 3,"random_state":97,"colsample_bytree":0.2,"subsample":0.8}
+tuning_params={"lambda":[0.5,1,10,100],
+               'max_depth': [3,4,5],
+               'learning_rate': [0.1],
+               "gamma":[0,0.5,1],
+               "reg_alpha":[0,1,5],
+               "reg_lambda":[0,1,5],
+               "n_estimators":[100,1000]}
+
+clf = xgb.XGBRegressor(silent=False, objective="reg:linear",early_stopping_rounds=3,random_state=97,
+                       colsample_bytree=0.2,subsample=0.8)
+rs_clf = RandomizedSearchCV(clf, param_distributions=tuning_params, n_iter=20, verbose=2, cv=4,
+                            n_jobs=4,
+                            scoring='neg_mean_squared_error', random_state=42)
+print("Randomized search..")
+search_time_start = time.time()
+rs_clf.fit(x_train,y_train)
+print("Randomized search time:", time.time() - search_time_start)
+best_score = rs_clf.best_score_
+best_params = rs_clf.best_params_
