@@ -2,8 +2,11 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 from sklearn.datasets import load_svmlight_file
+t0=pd.read_csv("../multitask/svmout/scaled_ic50_pk.svm.txt.csv")
 t1=pd.read_csv("../multitask/svmout/scaled_ki_pk.svm.txt.csv")
 t2=pd.read_csv("../multitask/svmout/scaled_kd_pk.svm.txt.csv")
+d0=t0.iloc[:,2:-5].as_matrix()
+y0=np.array(t0.iloc[:,-4])
 d1=t1.iloc[:,2:-5].as_matrix()
 y1=np.array(t1.iloc[:,-3])
 d2=t2.iloc[:,2:-5].as_matrix()
@@ -17,14 +20,15 @@ from sklearn.model_selection import train_test_split
 # dy2=y2[index2]
 dm1,tm1,dy1,ty1=train_test_split(d1,y1,test_size=0.2)
 dm2,tm2,dy2,ty2=train_test_split(d2,y2,test_size=0.2)
-
+dm0,tm0,dy0,ty0=train_test_split(d0,y0,test_size=0.2)
 
 
 import math
 num_epochs=100
 t2_minibatch_size=10
 t1_minibatch_size=int(t2_minibatch_size*d1.shape[0]/d2.shape[0])
-minibath_counts=math.ceil(d1.shape[0] / t1_minibatch_size)
+t0_minibatch_size=int(t2_minibatch_size*d0.shape[0]/d2.shape[0])
+minibath_counts=math.ceil(d0.shape[0] / t0_minibatch_size)
 shared_nodes1=400
 shared_nodes2=400
 shared_nodes3=200
@@ -32,9 +36,12 @@ X1 = tf.placeholder("float64", [None,d1.shape[1]], name="X1")
 X2=tf.placeholder("float64", [None,d1.shape[1]], name="X2")
 Y1 = tf.placeholder("float64", [None,], name="Y1")
 Y2 = tf.placeholder("float64", [None,], name="Y2")
+X0=tf.placeholder("float64", [None,d0.shape[1]], name="X0")
+Y0 = tf.placeholder("float64", [None,], name="Y0")
+
 
 def variable_parameters(var_name,shape):
-  with tf.variable_scope("parameters4", reuse=tf.AUTO_REUSE):
+  with tf.variable_scope("parameterskkk", reuse=tf.AUTO_REUSE):
     v = tf.get_variable(var_name, shape,initializer=tf.contrib.layers.xavier_initializer(),dtype="float64")
   return v
 
@@ -45,65 +52,57 @@ def multitask_structure():   #define the network structure
     shared_layer3_weights =variable_parameters("W_3",[shared_nodes2,shared_nodes3])
     Y1_layer_weights = variable_parameters("Y_1",[shared_nodes3,1])
     Y2_layer_weights = variable_parameters("Y_2",[shared_nodes3,1])
+    Y0_layer_weights = variable_parameters("Y_0",[shared_nodes3,1])
     shared_layer1_bias = variable_parameters("B1",[1,shared_nodes1])
     shared_layer2_bias = variable_parameters("B2",[1,shared_nodes2])
     shared_layer3_bias = variable_parameters("B3",[1,shared_nodes3])
+    Y0_layer_bias =variable_parameters("B_0",[1,1])
     Y1_layer_bias = variable_parameters("B_1",[1,1])
     Y2_layer_bias =variable_parameters("B_2",[1,1])
     
     #network topology
+    shared_layer1_0 = tf.nn.relu(tf.add(tf.matmul(X0,shared_layer1_weights),shared_layer1_bias))  #n*1000
+    shared_layer1_0=tf.nn.dropout(shared_layer1_0,0.8)
     shared_layer1_1 = tf.nn.relu(tf.add(tf.matmul(X1,shared_layer1_weights),shared_layer1_bias))  #n*1000
     shared_layer1_1=tf.nn.dropout(shared_layer1_1,0.8)
     shared_layer1_2 = tf.nn.relu(tf.add(tf.matmul(X2,shared_layer1_weights),shared_layer1_bias))   #n*1000
     shared_layer1_2=tf.nn.dropout(shared_layer1_2,0.8)
+
+    
+    shared_layer2_0 = tf.nn.relu(tf.add(tf.matmul(shared_layer1_0,shared_layer2_weights),shared_layer2_bias))  # n*500
+    shared_layer2_0=tf.nn.dropout(shared_layer2_0,0.8)
     shared_layer2_1 = tf.nn.relu(tf.add(tf.matmul(shared_layer1_1,shared_layer2_weights),shared_layer2_bias))  # n*500
     shared_layer2_1=tf.nn.dropout(shared_layer2_1,0.8)
     shared_layer2_2 = tf.nn.relu(tf.add(tf.matmul(shared_layer1_2,shared_layer2_weights),shared_layer2_bias))
     shared_layer2_2=tf.nn.dropout(shared_layer2_2,0.8)
+
+    shared_layer3_0 = tf.nn.relu(tf.add(tf.matmul(shared_layer2_0,shared_layer3_weights),shared_layer3_bias))  # n*500
+    shared_layer3_0=tf.nn.dropout(shared_layer3_0,0.8)
     shared_layer3_1 = tf.nn.relu(tf.add(tf.matmul(shared_layer2_1,shared_layer3_weights),shared_layer3_bias)) #n*200
     shared_layer3_1=tf.nn.dropout(shared_layer3_1,0.8)
     shared_layer3_2 = tf.nn.relu(tf.add(tf.matmul(shared_layer2_2,shared_layer3_weights),shared_layer3_bias))
     shared_layer3_2=tf.nn.dropout(shared_layer3_2,0.8)
-    Y1_layer = tf.nn.relu(tf.add(tf.matmul(shared_layer3_1,Y1_layer_weights),Y1_layer_bias))
-    Y2_layer = tf.nn.relu(tf.add(tf.matmul(shared_layer3_2,Y2_layer_weights),Y2_layer_bias))
-    Y1_layer=tf.nn.dropout(Y1_layer,0.8)
-    Y2_layer=tf.nn.dropout(Y2_layer,0.8)
-    return(Y1_layer,Y2_layer)
 
-# def multi_trainer():
-#     Y1_layer,Y2_layer=multitask_structure()
-#     Y1_Loss=tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(Y1, Y1_layer))))
-#     Y2_Loss=tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(Y2, Y2_layer))))
-#     Y1_op = tf.train.AdamOptimizer().minimize(Y1_Loss)
-#     Y2_op = tf.train.AdamOptimizer().minimize(Y2_Loss)
-#     Joint_Loss = 0.2*Y1_Loss + 0.8*Y2_Loss
-#     # Optimiser = tf.train.AdamOptimizer().minimize(Joint_Loss)
-#     Optimiser=tf.train.GradientDescentOptimizer(0.0003).minimize(Joint_Loss)
-#     import math
-#     with tf.Session() as session:
-#         session.run(tf.initialize_all_variables())
-#             # Make sure gradients are set to 0 before entering minibatch loop
-#             # Loop over minibatches and execute accumulate-gradient operation
-#         for i in range(num_epochs):
-#             _,t2_loss=session.run([Y2_op,Y2_Loss], 
-#                     feed_dict={
-#     #                     X1: d1,
-#     #                     Y1: y1,
-#                         X2: d2,
-#                         Y2: y2
-#                               })
-#             print("Step " + str(i) + ", task 1 Loss= " + \
-#                       "{:.4f}".format(t2_loss) + ", task 2 Loss= " + \
-#                       "{:.3f}".format(t2_loss))
+    Y0_layer = tf.nn.relu(tf.add(tf.matmul(shared_layer3_0,Y0_layer_weights),Y0_layer_bias))
+    Y0_layer=tf.layers.dense(Y0_layer,1)
+    Y1_layer = tf.nn.relu(tf.add(tf.matmul(shared_layer3_1,Y1_layer_weights),Y1_layer_bias))
+    Y1_layer=tf.layers.dense(Y1_layer,1)
+    Y2_layer = tf.nn.relu(tf.add(tf.matmul(shared_layer3_2,Y2_layer_weights),Y2_layer_bias))
+    Y2_layer=tf.layers.dense(Y2_layer,1)
+#     Y2_layer=tf.nn.dropout(Y2_layer,0.8)
+    return(Y0_layer,Y1_layer,Y2_layer)
+
 def joint_trainer():
     #shuffle data
-    Y1_layer,Y2_layer=multitask_structure()
+    Y0_layer,Y1_layer,Y2_layer=multitask_structure()
+    Y0_Loss=tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(Y0, Y0_layer))))
     Y1_Loss=tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(Y1, Y1_layer))))
     Y2_Loss=tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(Y2, Y2_layer))))
+    Y0_op = tf.train.AdamOptimizer().minimize(Y0_Loss)
     Y1_op = tf.train.AdamOptimizer().minimize(Y1_Loss)
     Y2_op = tf.train.AdamOptimizer().minimize(Y2_Loss)
-    Joint_Loss = 0.2*Y1_Loss + 0.8*Y2_Loss
-    Optimiser = tf.train.AdamOptimizer(learning_rate=0.00001).minimize(Joint_Loss)
+    Joint_Loss = 0.3*Y1_Loss+0.3*Y1_Loss + 0.4*Y2_Loss
+    Optimiser = tf.train.AdamOptimizer(learning_rate=0.0001).minimize(Joint_Loss)
 #     Optimiser=tf.train.GradientDescentOptimizer(0.003).minimize(Joint_Loss)
     import math
     with tf.Session() as session:
@@ -111,29 +110,38 @@ def joint_trainer():
         for i in range(num_epochs):
             print("epoch: %s, numbers of minibatches:%s"%(i,minibath_counts))
             for j in range(minibath_counts):
-                _, loss_1,loss_2=session.run([Optimiser,Y1_Loss,Y2_Loss], 
-                        feed_dict={X1: dm1[j*t1_minibatch_size:(j+1)*t1_minibatch_size],
+                _, loss_0,loss_1,loss_2=session.run([Optimiser,Y0_Loss,Y1_Loss,Y2_Loss], 
+                        feed_dict={
+                                            X0: dm0[j*t0_minibatch_size:(j+1)*t0_minibatch_size],
+                                            Y0: dy0[j*t0_minibatch_size:(j+1)*t0_minibatch_size],
+                                            X1: dm1[j*t1_minibatch_size:(j+1)*t1_minibatch_size],
                                             Y1: dy1[j*t1_minibatch_size:(j+1)*t1_minibatch_size],
-                                           X2: dm2[j*t2_minibatch_size:(j+1)*t2_minibatch_size],
+                                            X2: dm2[j*t2_minibatch_size:(j+1)*t2_minibatch_size],
                                             Y2: dy2[j*t2_minibatch_size:(j+1)*t2_minibatch_size]})
-                if j%600==0:
-                    eval_1,eval_2=session.run([Y1_Loss,Y2_Loss], 
-                        feed_dict={X1: tm1,
+                                                
+                if j%600==0 and j!=0:
+                    eval_0,eval_1,eval_2=session.run([Y0_Loss,Y1_Loss,Y2_Loss], 
+                        feed_dict={X0: tm0,
+                                    Y0: ty0,
+                                    X1: tm1,
                                     Y1: ty1,
                                     X2: tm2,
                                     Y2: ty2})
-                    print("Step " + str(i) + ", task 1 test Loss= " + \
+                    print("Step " + str(i) + ", task 0 test Loss= " + \
+                      "{:.4f}".format(eval_0)+", task 1 test Loss= " + \
                       "{:.4f}".format(eval_1) + ", task 2 test Loss= " + \
                       "{:.4f}".format(eval_2))
                     
 def alternative_trainer():
-    #shuffle data
-    Y1_layer,Y2_layer=multitask_structure()
+    Y0_layer,Y1_layer,Y2_layer=multitask_structure()
+    Y0_Loss=tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(Y0, Y0_layer))))
     Y1_Loss=tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(Y1, Y1_layer))))
     Y2_Loss=tf.sqrt(tf.reduce_mean(tf.square(tf.subtract(Y2, Y2_layer))))
+    Y0_op = tf.train.AdamOptimizer().minimize(Y0_Loss)
     Y1_op = tf.train.AdamOptimizer().minimize(Y1_Loss)
     Y2_op = tf.train.AdamOptimizer().minimize(Y2_Loss)
-    Joint_Loss = 0.2*Y1_Loss + 0.8*Y2_Loss
+    Joint_Loss = 0.2*Y1_Loss+0.2*Y1_Loss + 0.6*Y2_Loss
+    Optimiser_0 = tf.train.AdamOptimizer(learning_rate=0.0001).minimize(Y0_Loss)
     Optimiser_1 = tf.train.AdamOptimizer(learning_rate=0.0001).minimize(Y1_Loss)
     Optimiser_2 = tf.train.AdamOptimizer(learning_rate=0.0001).minimize(Y2_Loss)
 #     Optimiser=tf.train.GradientDescentOptimizer(0.003).minimize(Joint_Loss)
@@ -141,31 +149,39 @@ def alternative_trainer():
     with tf.Session() as session:
         session.run(tf.initialize_all_variables())
         for i in range(num_epochs):
-            if np.random.rand() < 0.5:
-                print("epoch: %s,task 1"%(i,))
-                for j in range(minibath_counts):
-                    _, loss_1=session.run([Optimiser_1,Y1_Loss], 
-                            feed_dict={X1: dm1[j*t1_minibatch_size:(j+1)*t1_minibatch_size],
-                                                Y1: dy1[j*t1_minibatch_size:(j+1)*t1_minibatch_size],
-                                               X2: dm2[j*t2_minibatch_size:(j+1)*t2_minibatch_size],
-                                                Y2: dy2[j*t2_minibatch_size:(j+1)*t2_minibatch_size]})
+            ##optimizing multiple objective functions alternatively with a probability
+            if np.random.rand() < 0.6:
+                if np.random.rand()<0.5:
+                    print("epoch: %s,task 0"%(i,))
+                    for j in range(minibath_counts):
+                        _, loss_1=session.run([Optimiser_0,Y0_Loss], 
+                                feed_dict={
+                                        X0: dm0[j*t0_minibatch_size:(j+1)*t0_minibatch_size],
+                                        Y0: dy0[j*t0_minibatch_size:(j+1)*t0_minibatch_size]})
                     
+                else :
+                    print("epoch: %s,task 1"%(i,))
+                    for j in range(minibath_counts):
+                        _, loss_1=session.run([Optimiser_1,Y1_Loss], 
+                                feed_dict={
+                                                    X1: dm1[j*t1_minibatch_size:(j+1)*t1_minibatch_size],
+                                                    Y1: dy1[j*t1_minibatch_size:(j+1)*t1_minibatch_size]})
             else:
                 print("epoch: %s,task 2"%(i,))
                 for j in range(minibath_counts):
-                    _, loss_2=session.run([Optimiser_2,Y2_Loss], 
-                            feed_dict={X1: dm1[j*t1_minibatch_size:(j+1)*t1_minibatch_size],
-                                                Y1: dy1[j*t1_minibatch_size:(j+1)*t1_minibatch_size],
-                                               X2: dm2[j*t2_minibatch_size:(j+1)*t2_minibatch_size],
-                                                Y2: dy2[j*t2_minibatch_size:(j+1)*t2_minibatch_size]})
-            eval_1,eval_2=session.run([Y1_Loss,Y2_Loss], 
-                        feed_dict={X1: tm1,
+                        _, loss_2=session.run([Optimiser_2,Y2_Loss], 
+                                feed_dict={
+                                                    X2: dm2[j*t2_minibatch_size:(j+1)*t2_minibatch_size],
+                                                    Y2: dy2[j*t2_minibatch_size:(j+1)*t2_minibatch_size]})
+            eval_0,eval_1,eval_2=session.run([Y0_Loss,Y1_Loss,Y2_Loss], 
+                        feed_dict={X0: tm0,
+                                    Y0: ty0,
+                                    X1: tm1,
                                     Y1: ty1,
                                     X2: tm2,
                                     Y2: ty2})
-            print("Step " + str(i) + ", task 1 test Loss= " + \
+            print("Step " + str(i) + ", task 0 test Loss= " + \
+                      "{:.4f}".format(eval_0)+", task 1 test Loss= " + \
                       "{:.4f}".format(eval_1) + ", task 2 test Loss= " + \
                       "{:.4f}".format(eval_2))
-alternative_trainer()     
-
-
+joint_trainer()     
